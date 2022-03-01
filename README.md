@@ -1,4 +1,4 @@
-# 响应式实现
+# 手写 mini-vue
 
 > 学习笔记，来源于：B站 [阿崔cxr](https://space.bilibili.com/175301983) 老师的公开视频 [手写 mini-vue](https://www.bilibili.com/video/BV1Rt4y1B7sC?p=1)
 
@@ -91,12 +91,7 @@ a.value = 20
 
 ## v4 实现简单版的响应式
 
-需求：
-
-- 收集依赖
-- 触发依赖
-
-我们使用发布订阅模式：
+基于上述需求，代码实现，下面是简单的 API 设计
 
 ```js
 class Dep {
@@ -672,13 +667,15 @@ module.exports = {
 
 至此，大功告成；
 
+---
+
 # 实现 setup、render
 
 ## 初级版本
 
-基于上面我们实现的 `reactive, effectWatch`，我们可以简单实现 `setup, render`，代码如下：
+基于上篇文章 [手写 mini-vue-1 响应式的实现](https://juejin.cn/post/7069760792572198925) 我们实现的 `reactive, effectWatch`，接下来我们来简单实现 `setup, render`，代码如下：
 
-- API 简单设计：
+- API 简单设计和使用方式：
 
 ```js
 const App = {
@@ -730,20 +727,22 @@ state.count ++
 
 我们可以看到页面中的视图发生了更新！
 
-当前代码的缺点：每次更新 DOM 的时候都摧毁所有的 dom 元素，这样对性能影响很大；
+**当前代码的缺点：每次更新 DOM 的时候都摧毁所有的 dom 元素，这样对性能影响很大；**
 
 ```js
 // reset
 document.body.innerHTML = ""
 ```
 
-理想的方式是，数据更新后，视图对应的部分进行 **局部更新**。
+理想的方式是，数据更新后，视图对应的部分的 DOM 进行 **局部更新**。
 
 ## 进阶 setup、render
 
 将上面的代码进行抽离封装，实现类似下面的使用方式：
 
 ```js
+// 文件路径 /index.js
+
 import App  from './App.js'
 import { createApp  } from './core/index.js'
 
@@ -753,6 +752,7 @@ createApp(App).mount(document.querySelector("#app"))
 - 实现 App.js：主要返回一个 vue 对象
 
 ```js
+//  文件路径 /App.js
 import { reactive } from "./core/reactivity/index.js";
 
 export default {
@@ -779,6 +779,7 @@ export default {
 - 实现 `createApp` ，当前主要做了挂载和更新的操作；
 
 ```js
+//  文件路径 /core/index.js
 import { effectWatch } from './reactivity/index.js'
 
 export function createApp(rootComponent) {
@@ -809,6 +810,7 @@ export function createApp(rootComponent) {
 - children
 
 ```js
+//  文件路径 /core/h.js
 // 创建虚拟节点 vnode
 export function h(tag, props, children) {
   return {
@@ -826,6 +828,7 @@ export function h(tag, props, children) {
 - 修改 `App.js` 文件，使用 `h` 函数；
 
 ```js
+//  文件路径 /App.js
 import { reactive } from "./core/reactivity/index.js";
 import { h } from './core/h.js'
 
@@ -856,6 +859,7 @@ export default {
 - 将 dom 挂在到 container 上
 
 ```js
+//  文件路径 /core/index.js
 import { effectWatch } from './reactivity/index.js'
 import { mountElement } from './renderer/index.js'
 export function createApp(rootComponent) {
@@ -894,6 +898,7 @@ export function mountElement(vnode, container) {
 详细实现：
 
 ```js
+//  文件路径 /core/renderer/index.js
 export function mountElement(vnode, container) {
   const { tag, props, children } = vnode;
 
@@ -924,9 +929,10 @@ export function mountElement(vnode, container) {
 }
 ```
 
-- 代码验证：
+- 测试数据验证：
 
 ```js
+//  文件路径 /App.js
 import { reactive } from "./core/reactivity/index.js";
 import { h } from './core/h.js'
 
@@ -965,9 +971,19 @@ state.count ++
 
 
 
+---
+
 # 实现 虚拟 dom 和 diff
 
-场景：上面我们实现了 setup 和 render，但是有个性能问题：
+基于前面 2 篇文章
+
+- [手写 mini-vue-1 响应式的实现](https://juejin.cn/post/7069760792572198925)
+- [手写 mini-vue-2 实现 setup、render](https://juejin.cn/post/7070052244065878024)
+
+
+我们分别实现了 `reactive, effectWatch, setup, render`
+
+但是有个性能问题：
 
 ```js
 // ... 
@@ -1014,7 +1030,7 @@ el.replaceWith(newEl)
 ```js
 // children --> 简化的diff，使用暴力解法
 
-// 1. newChidren -> string (oldChildren -> string oldChildren ->array)
+// 1. newChidren -> string (oldChildren -> string oldChildren -> array)
 // 2. newChildren -> array (oldChildren -> string oldchildren -> array)
 
 ```
@@ -1033,8 +1049,7 @@ export function createApp(rootComponent) {
   return {
     mount(rootContainer) {
       const context = rootComponent.setup();
-      let isMounted = false,
-          preVnodeTree = null;
+      let isMounted = false, preVnodeTree = null;
       effectWatch(() => {
         if (!isMounted) {
           // 初始化
@@ -1133,7 +1148,7 @@ if (oldProps) {
 }
 ```
 
-上述代码和注释应该还是比较好理解的，主要分2个步骤处理属性不同问题：更新/新增、删除；
+上述代码和注释应该还是比较好理解的，主要分2个步骤处理属性不同问题：**更新/新增、删除**；
 
 - children 更新：
 
@@ -1145,7 +1160,7 @@ function isNumberOrString(value) {
 }
 ```
 
-接下来我们看 children 的 diff ，伪代码逻辑为：
+接下来我们看 children 的 diff ，**伪代码逻辑**为：
 
 - 若 新节点 为 字符串或者数字
   - 若 旧节点 是否为 字符串或者为数字
@@ -1223,7 +1238,9 @@ if (isNumberOrString(newChildren)) {
 
 此时，通过上述代码，我们实现了简化版本的 diff 算法；
 
-上面提到了 `mountElement` 方法，实际上可以认为是基于 vnode 创建 dom ，具体我们回顾一下：
+上面提到了 `mountElement` 方法，它是做什么的？
+
+实际上可以认为是 **基于 vnode 创建 dom**，具体我们回顾一下：
 
 ```js
 export function mountElement(vnode, container) {
@@ -1255,7 +1272,11 @@ export function mountElement(vnode, container) {
 
 ## 验证
 
-> 打开 chrome 控制台，最右侧倒数第二个工具图标（三个点），我们点击选择 【show console drawer】，或者直接按下 【esc】按钮；目的是方便观察 在 console 控制台更新 state 的时候，视图的 dom 局部更新
+> 打开 chrome 控制台，点击最右侧倒数第二个工具图标（三个点），我们点击选择 【show console drawer】，
+> 
+> 或者直接键盘左上角按下 【Esc】；
+>
+> **目的是方便同时使用 console 面板和 Elements 面板，观察控制台更新 state 的时候，视图的 dom 局部更新**
 
 - 测试数据准备：
 
@@ -1318,4 +1339,6 @@ $0.textContent = "123"
 此时，我们可以看到，只有上面选中的 `span` 更新了；
 
 至此，我们的简化版 diff 算法实现总算大功告成 
+
+
 
